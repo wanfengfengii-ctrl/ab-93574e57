@@ -1,0 +1,44 @@
+# Momentum-plan compilation service.
+#
+#   docker compose up --build                 # API on http://localhost:${HOST_PORT:-8080}
+#   docker compose up --build --exit-code-from verify
+#                                               # one-shot verification, exit code = verdict
+#
+# The host port is configurable through the HOST_PORT environment variable
+# (see .env.example); the container always listens on 8080.
+
+name: momentum-plans
+
+services:
+  api:
+    build:
+      context: .
+    image: momentum-plans:local
+    environment:
+      PORT: "8080"
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8080') + '/health', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  verify:
+    build:
+      context: .
+    image: momentum-plans:local
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_BASE_URL: http://api:8080
+      VERIFY_API_WAIT_SECONDS: "90"
+    command: ["python", "-m", "verify.verify"]
+    restart: "no"
